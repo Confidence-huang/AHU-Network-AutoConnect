@@ -51,11 +51,13 @@ function Get-LatestLogSummary {
         return $null
     }
 
-    $tail = Get-Content -LiteralPath $latest.FullName -Tail 5 -ErrorAction SilentlyContinue
+    $tail = @(Get-Content -LiteralPath $latest.FullName -Tail 5 -ErrorAction SilentlyContinue |
+        ForEach-Object { [string]$_ })   # Plain strings only: Get-Content note properties would drag the whole
+                                         # provider object graph into the JSON output.
     return [ordered]@{
         latest_log = $latest.Name
         size_bytes = $latest.Length
-        tail       = @($tail)
+        tail       = $tail
     }
 }
 
