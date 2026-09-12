@@ -844,12 +844,22 @@ function Start-AHUCampusLogin {
 if ($MyInvocation.InvocationName -ne ".") {
     $script:ExitCode = Start-AHUCampusLogin
     if ($Visible) {
-        switch ($script:ExitCode) {
-            0       { Write-Host "`n[OK] Network is authenticated." -ForegroundColor Green }
-            2       { Write-Host "`n[SKIP] No campus network detected." -ForegroundColor Yellow }
-            3       { Write-Host "`n[FAIL] Login did not succeed." -ForegroundColor Red }
-            4       { Write-Host "`n[FAIL] Account or password was rejected." -ForegroundColor Red }
-            default { Write-Host "`n[ERROR] Exit code $script:ExitCode." -ForegroundColor Red }
+        if ($InspectOnly) {
+            if ($script:ExitCode -eq 0) {
+                Write-Host "`n[OK] InspectOnly diagnosis complete; no login request was sent." -ForegroundColor Green
+            }
+            else {
+                Write-Host "`n[SKIP] No campus network detected; nothing was sent." -ForegroundColor Yellow
+            }
+        }
+        else {
+            switch ($script:ExitCode) {
+                0       { Write-Host "`n[OK] Network is authenticated." -ForegroundColor Green }
+                2       { Write-Host "`n[SKIP] No campus network detected." -ForegroundColor Yellow }
+                3       { Write-Host "`n[FAIL] Login did not succeed." -ForegroundColor Red }
+                4       { Write-Host "`n[FAIL] Account or password was rejected." -ForegroundColor Red }
+                default { Write-Host "`n[ERROR] Exit code $script:ExitCode." -ForegroundColor Red }
+            }
         }
     }
     exit $script:ExitCode
