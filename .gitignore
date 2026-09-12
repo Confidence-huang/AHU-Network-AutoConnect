@@ -1,0 +1,5 @@
+# Never commit real credentials or local logs.
+config.json
+logs/
+backup/
+*.log

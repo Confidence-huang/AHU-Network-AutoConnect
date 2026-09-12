@@ -1,0 +1,25 @@
+{
+  "campus_user": "YOUR_CAMPUS_ACCOUNT",
+  "campus_pass": "YOUR_CAMPUS_PASSWORD",
+  "broadband_user": "YOUR_BROADBAND_ACCOUNT",
+  "broadband_pass": "YOUR_BROADBAND_PASSWORD",
+  "portal_base": "http://172.16.253.3:801/eportal/",
+  "check_host": "",
+  "portal_check_hosts": [
+    "172.16.253.1",
+    "172.16.253.3"
+  ],
+  "campus_ip_prefixes": [
+    "10.",
+    "172.16.",
+    "172.21.",
+    "172.29."
+  ],
+  "preferred_interfaces": [
+    "Ethernet",
+    "以太网"
+  ],
+  "max_retries": 10,
+  "retry_interval_sec": 10,
+  "log_retention_days": 30
+}
