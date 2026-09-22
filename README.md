@@ -4,7 +4,8 @@
 
 纯 PowerShell 实现，无第三方依赖、无常驻进程、完全可审计。
 
-- 平台：Windows 10/11，Windows PowerShell 5.1 与 PowerShell 7 双宿主兼容
+- 平台：Windows 10/11，Windows PowerShell 5.1 与 PowerShell 7 **双宿主兼容**
+- **契约宿主（自动化链路）：Windows PowerShell 5.1** —— 见下方「运行宿主说明」
 - 认证入口：`http://172.16.253.3:801/eportal/`（Dr.COM JSONP 接口）
 - 权限：全程当前用户，无需管理员
 
@@ -72,7 +73,7 @@ powershell -ExecutionPolicy Bypass -File .\inspect-status.ps1
 
 ```
 触发（登录 / NetworkProfile 事件 10000 / 每小时）
-  └─ wscript.exe run-hidden.vbs        ← 无闪窗，优先 PowerShell 7
+  └─ wscript.exe run-hidden.vbs        ← 无闪窗；仅当 PS7 以 MSI 包安装时才用它，否则回落 5.1
       └─ ahu-connect.ps1
           ├─ 1. 选择出口 IP
           │     ├─ 默认路由被虚拟网卡（TUN）持有时：直接走物理接口兜底
@@ -88,6 +89,26 @@ powershell -ExecutionPolicy Bypass -File .\inspect-status.ps1
 ```
 
 为什么不能随便取"第一个本机 IP"：开代理软件的电脑上，`socket.gethostbyname` 一类取法几乎必然拿到 TUN 虚拟网卡的 `198.18.x.x`，Portal 会认证一个不存在的客户端。本工具的三级选择策略专门解决这个问题。
+
+## 运行宿主说明（Windows PowerShell 5.1 / PowerShell 7）
+
+`run-hidden.vbs` **只在 PowerShell 7 以 MSI 包安装时**才会优先使用它 —— 探测的是固定路径 `%ProgramFiles%\PowerShell\7\pwsh.exe`。以下情况会**静默回落到 `powershell.exe`（Windows PowerShell 5.1）**：
+
+- PS7 是通过 **Microsoft Store / MSIX** 安装的（本机实测就是这种）；或
+- PS7 装在其它路径（winget / scoop / 便携版）。
+
+> **Store/MSIX 版的 `pwsh.exe` 别名（`%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe`）是被刻意忽略的** ——
+> 它是 0 字节 reparse point，在计划任务的非交互会话里可能解析失败。原因见 `run-hidden.vbs` 头部注释。
+
+**结论：自动化链路（登录启动项 + 两个计划任务）的实际契约宿主是 `Windows PowerShell 5.1`。** 因此：
+
+- `ahu-connect.ps1` **必须保持 5.1 兼容**，不得引入 PS7 专有语法（`??`、三元运算符、`-TimeoutSeconds`、`&&` / `||` 链等）。
+  当前实现已把网络原语全部换成与宿主无关的 .NET API（`System.Net.NetworkInformation.Ping`、`HttpWebRequest`）——
+  这正是 v6 修掉「宿主版本依赖」的做法，**请勿回退**。
+- 手动运行不在此限：`pwsh -File .\ahu-connect.ps1`、`pwsh -File .\tests\run-tests.ps1` 都可以。
+- **排查时先确认实际宿主**：日志每行都记了版本，例如
+  `[2026-09-22 12:16:02] [DEBUG] ahu-connect v6 starting (PowerShell 5.1.26100.9444)`。
+  如果你的机器装的是 Store 版 PS7，这里出现 `5.1` 属**预期行为**，不是故障。
 
 ## 常见问题
 
