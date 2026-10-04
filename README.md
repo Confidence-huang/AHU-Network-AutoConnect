@@ -73,7 +73,7 @@ pwsh -ExecutionPolicy Bypass -File .\inspect-status.ps1
 
 ```
 触发（登录 / NetworkProfile 事件 10000 / 每小时）
-  └─ wscript.exe run-hidden.vbs        ← 无闪窗；仅当 PS7 以 MSI 包安装时才用它，否则回落 5.1
+  └─ wscript.exe run-hidden.vbs        ← 无闪窗；宿主 = PowerShell 7（where pwsh 解析，Store/MSI 都覆盖），没装 7 才回落 5.1
       └─ ahu-connect.ps1
           ├─ 1. 选择出口 IP
           │     ├─ 默认路由被虚拟网卡（TUN）持有时：直接走物理接口兜底
