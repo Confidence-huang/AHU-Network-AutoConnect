@@ -5,7 +5,7 @@
 纯 PowerShell 实现，无第三方依赖、无常驻进程、完全可审计。
 
 - 平台：Windows 10/11，Windows PowerShell 5.1 与 PowerShell 7 **双宿主兼容**
-- **契约宿主（自动化链路）：Windows PowerShell 5.1** —— 见下方「运行宿主说明」
+- **契约宿主（自动化链路）：PowerShell 7（pwsh）** —— 2026-10-04 起，见下方「运行宿主说明」
 - 认证入口：`http://172.16.253.3:801/eportal/`（Dr.COM JSONP 接口）
 - 权限：全程当前用户，无需管理员
 
@@ -58,13 +58,13 @@
 
 ```powershell
 # 前台诊断运行（会发送真实认证请求）
-powershell -ExecutionPolicy Bypass -File "$env:APPDATA\ahu-network\ahu-connect.ps1" -Visible
+pwsh -ExecutionPolicy Bypass -File "$env:APPDATA\ahu-network\ahu-connect.ps1" -Visible
 
 # 只读诊断：选择网卡但绝不发送登录请求
-powershell -ExecutionPolicy Bypass -File "$env:APPDATA\ahu-network\ahu-connect.ps1" -InspectOnly -Visible
+pwsh -ExecutionPolicy Bypass -File "$env:APPDATA\ahu-network\ahu-connect.ps1" -InspectOnly -Visible
 
 # 状态检查（JSON 输出，不读配置内容、不访问 Portal）
-powershell -ExecutionPolicy Bypass -File .\inspect-status.ps1
+pwsh -ExecutionPolicy Bypass -File .\inspect-status.ps1
 ```
 
 退出码：`0` 成功或已在线；`1` 配置错误；`2` 未检测到校园网；`3` 重试全部失败；`4` 账号或密码被 Portal 拒绝（请修改 `config.json` 后重试）。
@@ -90,25 +90,33 @@ powershell -ExecutionPolicy Bypass -File .\inspect-status.ps1
 
 为什么不能随便取"第一个本机 IP"：开代理软件的电脑上，`socket.gethostbyname` 一类取法几乎必然拿到 TUN 虚拟网卡的 `198.18.x.x`，Portal 会认证一个不存在的客户端。本工具的三级选择策略专门解决这个问题。
 
-## 运行宿主说明（Windows PowerShell 5.1 / PowerShell 7）
+## 运行宿主说明（PowerShell 7 优先，2026-10-04 修订）
 
-`run-hidden.vbs` **只在 PowerShell 7 以 MSI 包安装时**才会优先使用它 —— 探测的是固定路径 `%ProgramFiles%\PowerShell\7\pwsh.exe`。以下情况会**静默回落到 `powershell.exe`（Windows PowerShell 5.1）**：
+**当前约定：自动化链路（登录启动项 + 两个计划任务）跑 PowerShell 7（pwsh）。**
 
-- PS7 是通过 **Microsoft Store / MSIX** 安装的（本机实测就是这种）；或
-- PS7 装在其它路径（winget / scoop / 便携版）。
+`run-hidden.vbs` v3 的宿主选择顺序：
 
-> **Store/MSIX 版的 `pwsh.exe` 别名（`%LOCALAPPDATA%\Microsoft\WindowsApps\pwsh.exe`）是被刻意忽略的** ——
-> 它是 0 字节 reparse point，在计划任务的非交互会话里可能解析失败。原因见 `run-hidden.vbs` 头部注释。
+1. `where.exe pwsh.exe` —— Store/MSIX 别名与常规安装都能命中（本机走这条）；
+2. `%ProgramFiles%\PowerShell\7\pwsh.exe` —— MSI 常规路径兜底；
+3. `powershell.exe` —— 只有机器上确实没有 PowerShell 7 时才用。
 
-**结论：自动化链路（登录启动项 + 两个计划任务）的实际契约宿主是 `Windows PowerShell 5.1`。** 因此：
+> **v2 的错误（已修）**：v2 **只探测 MSI 固定路径**，而本机的 PS7 是 Microsoft Store 版，
+> 于是静默回落到 5.1。实测后果：2026-09-13 起日志里 `PowerShell 5.1.26100.9444` 出现 **467 次**、
+> `PowerShell 7` **0 次**；也就是说"双宿主兼容"被用成了"永远跑旧宿主"。
+> v3 改用 `where.exe` 解析（与仓库里 `Project22` 的 `course-gpu-worker.vbs` 同一手法），
+> 修后实测日志首次出现 `[DEBUG] ahu-connect v6 starting (PowerShell 7.6.6)`。
+>
+> （v2 曾担心 Store 别名在计划任务的非交互会话里解析失败；v3 经 `cscript` 实测可正常解析，
+> 且 `where.exe` 解析出的是别名，真正执行时由 AppX 重定向到
+> `C:\Program Files\WindowsApps\Microsoft.PowerShell_7.6.6.0_x64__8wekyb3d8bbwe\pwsh.exe`。）
 
-- `ahu-connect.ps1` **必须保持 5.1 兼容**，不得引入 PS7 专有语法（`??`、三元运算符、`-TimeoutSeconds`、`&&` / `||` 链等）。
-  当前实现已把网络原语全部换成与宿主无关的 .NET API（`System.Net.NetworkInformation.Ping`、`HttpWebRequest`）——
-  这正是 v6 修掉「宿主版本依赖」的做法，**请勿回退**。
-- 手动运行不在此限：`pwsh -File .\ahu-connect.ps1`、`pwsh -File .\tests\run-tests.ps1` 都可以。
-- **排查时先确认实际宿主**：日志每行都记了版本，例如
-  `[2026-09-22 12:16:02] [DEBUG] ahu-connect v6 starting (PowerShell 5.1.26100.9444)`。
-  如果你的机器装的是 Store 版 PS7，这里出现 `5.1` 属**预期行为**，不是故障。
+仍然成立的两条：
+
+- `ahu-connect.ps1` **继续对 5.1 与 7 双兼容**，不得引入 PS7 专有语法（`??`、三元运算符、`-TimeoutSeconds`、`&&` / `||` 链等）——
+  它是"最后兜底"路径（机器没装 PS7 时由 5.1 执行），也是为什么网络原语全部用与宿主无关的 .NET API
+  （`System.Net.NetworkInformation.Ping`、`HttpWebRequest`）。**请勿回退成 PS7 专有写法。**
+- **排查时先确认实际宿主**：日志每行都记版本。出现 `PowerShell 5.1` 现在意味着
+  **这台机器没装 PowerShell 7**（或 `where pwsh.exe` 解析不到），值得查，而不再是"预期行为"。
 
 ## 常见问题
 
@@ -142,7 +150,7 @@ uninstall.bat
 
 ```powershell
 # 离线单元测试（不发任何网络请求），5.1 与 7 均可运行
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
 ```
 

@@ -4,7 +4,7 @@
 # the Windows NetworkProfile connect event (Event ID 10000).
 #
 # Existing files are backed up before being replaced; an existing config.json
-# is never touched. Run with: powershell -ExecutionPolicy Bypass -File install.ps1
+# is never touched. Run with: pwsh -ExecutionPolicy Bypass -File install.ps1
 [CmdletBinding()]
 param(
     [string]$HomeDirectory = "$env:APPDATA\ahu-network",
@@ -125,10 +125,12 @@ if (-not $SkipScheduledTasks) {
 # --- Safe verification ---
 if (-not $SkipVerification) {
     Write-Step "Running a read-only InspectOnly check (no login request is sent)..."
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HomeDirectory "ahu-connect.ps1") -InspectOnly -Visible
+    # 验证也走 PowerShell 7（与 run-hidden.vbs v3 同一约定；本机没装 7 才退回 5.1）
+    $verifyHost = if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) { "pwsh.exe" } else { "powershell.exe" }
+    & $verifyHost -NoProfile -ExecutionPolicy Bypass -File (Join-Path $HomeDirectory "ahu-connect.ps1") -InspectOnly -Visible
     Write-Step "Done. InspectOnly exit code 0 = campus interface selected; 2 = no campus network right now (fine off campus)."
 }
 
 Write-Host ""
 Write-Host "Install complete. Logs: $(Join-Path $HomeDirectory 'logs')"
-Write-Host "Uninstall with: powershell -ExecutionPolicy Bypass -File uninstall.ps1"
+Write-Host "Uninstall with: pwsh -ExecutionPolicy Bypass -File uninstall.ps1"
