@@ -92,7 +92,32 @@ Assert-True ($fallbackJoined -eq "fallback") "missing key falls back"
 $script:Config = $null
 
 Write-Host ""
-Write-Host "[5] Ping probe works on this host"
+Write-Host "[5] Portal login URL"
+$url = New-PortalLoginUrl -PortalBase "http://172.16.253.3:801/eportal/" -AccountName "202312345@telecom" -AccountPassword 'p&a+s s' -ClientIP "172.21.12.248"
+Assert-True ($url -like "http://172.16.253.3:801/eportal/?c=Portal&a=login&callback=dr1003&login_method=1*") "portal base, callback and login_method preserved"
+Assert-True ($url -like "*user_account=202312345%40telecom*")  "account suffix @ is encoded"
+Assert-True ($url -like "*user_password=p%26a%2Bs%20s*")       "password reserved characters are encoded"
+Assert-True ($url -like "*wlan_user_ip=172.21.12.248")         "wlan_user_ip carries the selected campus IP"
+Assert-True (-not ($url -like "*user_password=p&a*"))          "raw password never appears in the query"
+
+# Invoke-PortalLogin must reuse the builder and must never log the password.
+$script:CapturedUrl  = ""
+$script:CapturedLogs = @()
+$script:Config = [pscustomobject]@{ portal_base = "http://172.16.253.3:801/eportal/" }
+function Write-RunLog { param([string]$Message, [string]$Level = "INFO") $script:CapturedLogs += $Message }
+function Invoke-PortalHttpRequest {
+    param([string]$Url, [int]$TimeoutSeconds = 10)
+    $script:CapturedUrl = $Url
+    return @{ StatusCode = 200; Body = 'dr1003({"ret_code":0,"msg":"ok"});' }
+}
+$loginResult = Invoke-PortalLogin -Account @{ Tag = "Test"; User = "u@telecom"; Password = "secret&1" } -IPAddress "10.1.2.3"
+Assert-True ($loginResult.Outcome -eq "Success") "Invoke-PortalLogin still classifies ret_code 0 as Success"
+Assert-True ($script:CapturedUrl -eq (New-PortalLoginUrl -PortalBase "http://172.16.253.3:801/eportal/" -AccountName "u@telecom" -AccountPassword "secret&1" -ClientIP "10.1.2.3")) "Invoke-PortalLogin sends exactly the built URL"
+Assert-True (-not (($script:CapturedLogs -join "`n") -like "*secret*")) "password never reaches the log"
+$script:Config = $null
+
+Write-Host ""
+Write-Host "[6] Ping probe works on this host"
 $gateway = (Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway } | Select-Object -First 1)
 if ($gateway) {
     $gatewayAddress = [string]($gateway.IPv4DefaultGateway | Select-Object -First 1).NextHop
@@ -104,7 +129,7 @@ else {
 }
 
 Write-Host ""
-Write-Host "[6] InspectOnly sends nothing"
+Write-Host "[7] InspectOnly sends nothing"
 $testHome = Join-Path $env:TEMP ("ahu-connect-test-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 New-Item -ItemType Directory -Path $testHome -Force | Out-Null
 @{

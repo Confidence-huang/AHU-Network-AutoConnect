@@ -628,6 +628,29 @@ function Get-PortalLoginResult {
 }
 
 
+# --- Portal login URL ---
+function New-PortalLoginUrl {
+    param(
+        [string]$PortalBase,
+        [string]$AccountName,
+        [string]$AccountPassword,
+        [string]$ClientIP
+    )
+
+    # Encode every user-supplied value here: account suffixes (@telecom) and
+    # passwords containing & / + / spaces must survive the query string intact.
+    $query   = "?c=Portal"                                                        # Portal controller.
+    $query  += "&a=login"                                                         # Login action.
+    $query  += "&callback=dr1003"                                                 # JSONP wrapper the portal answers with.
+    $query  += "&login_method=1"                                                  # 1 = account/password login.
+    $query  += "&user_account=$([uri]::EscapeDataString($AccountName))"           # Account names can carry suffixes such as @telecom.
+    $query  += "&user_password=$([uri]::EscapeDataString($AccountPassword))"      # Passwords are encoded and never written to logs.
+    $query  += "&wlan_user_ip=$([uri]::EscapeDataString($ClientIP))"              # The selected physical campus IP is the critical field.
+
+    return ($PortalBase + $query)                                                 # Pure function: the exact request shape is unit-tested.
+}
+
+
 # --- Portal login request ---
 function Invoke-PortalLogin {
     param(
@@ -635,15 +658,13 @@ function Invoke-PortalLogin {
         [string]$IPAddress
     )
 
-    $baseUrl = [string]$script:Config.portal_base
-    $query   = "?c=Portal"
-    $query  += "&a=login"
-    $query  += "&callback=dr1003"
-    $query  += "&login_method=1"
-    $query  += "&user_account=$([uri]::EscapeDataString($Account.User))"        # Account names can contain provider suffixes such as @telecom.
-    $query  += "&user_password=$([uri]::EscapeDataString($Account.Password))"   # Passwords are encoded and never written to logs.
-    $query  += "&wlan_user_ip=$([uri]::EscapeDataString($IPAddress))"           # The selected physical campus IP is the critical field.
-    $url     = $baseUrl + $query
+    $loginUrlArguments = @{                                                       # Splatting keeps the call readable and the data flow explicit.
+        PortalBase      = [string]$script:Config.portal_base
+        AccountName     = $Account.User
+        AccountPassword = $Account.Password
+        ClientIP        = $IPAddress
+    }
+    $url = New-PortalLoginUrl @loginUrlArguments
 
     Write-RunLog "[$($Account.Tag)] Login with campus IP $IPAddress" "INFO"
 
